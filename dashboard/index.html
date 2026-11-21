@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Token Launch Radar — pre-token protocols ranked by implied launch value</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="masthead">
+  <div class="masthead-in">
+    <div>
+      <h1>Token Launch Radar</h1>
+      <p class="tagline">Every protocol that still records no token, ranked by what its launch would be worth — with the steps to farm each one.</p>
+    </div>
+    <div class="mast-stats" id="mastStats"></div>
+  </div>
+</header>
+
+<main>
+  <section class="model card">
+    <h2>How the implied value is computed</h2>
+    <p class="model-text">
+      Protocols that already launched reveal what the market pays per dollar of TVL. For each category this board takes the
+      <strong>median market-cap / TVL multiple of that category's tokenised protocols</strong> in the snapshot (the global median where a
+      category has fewer than three), then prices every still-tokenless protocol as
+      <strong>TVL &times; peer multiple &times; growth factor &times; maturity factor</strong>. The growth factor is
+      1 + clamp(7-day TVL change, &minus;60% to +150%) / 250; the maturity factor is 0.9 + 0.1 &times; years tracked with no token, capped at
+      four years. Tokenised protocols are the yardstick, never rows: the board is pre-token only, and a wrapped or staked product of a
+      token that already trades is excluded by the same rule the snapshot's watchlist follows.
+    </p>
+    <div class="bench-wrap">
+      <table class="bench" id="benchTable">
+        <thead><tr><th>Peer benchmark</th><th>Tokenised peers</th><th>Median mcap / TVL</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="boardView">
+    <div class="controls card">
+      <label class="ctl grow">Search
+        <input id="q" type="search" placeholder="Protocol name or slug" autocomplete="off">
+      </label>
+      <label class="ctl">Category
+        <select id="cat"></select>
+      </label>
+      <label class="ctl">Chain
+        <select id="chain"></select>
+      </label>
+      <label class="ctl">Sort by
+        <select id="sort">
+          <option value="implied">Implied value</option>
+          <option value="tvl">TVL</option>
+          <option value="change">7d change</option>
+          <option value="age">Longest tokenless</option>
+          <option value="name">Name A-Z</option>
+        </select>
+      </label>
+      <label class="ctl check">
+        <input id="watch" type="checkbox"> Watchlist only
+      </label>
+      <span class="showing" id="showing"></span>
+    </div>
+
+    <div class="card table-card">
+      <table class="board" id="boardTable">
+        <thead>
+          <tr>
+            <th class="num">#</th><th>Protocol</th><th>Category</th><th>Chains</th>
+            <th class="num">TVL</th><th class="num">7d</th><th class="num">Implied value</th>
+            <th class="num">Multiple</th><th class="num">Tokenless for</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="detailView" hidden></section>
+
+  <footer>
+    <p>Built from a sealed snapshot of DefiLlama's protocol data (fetched 2026-11-14). "Records no token" is what the snapshot's record
+    shows — a protocol may have a token its record does not carry. An implied value is this board's model output, not a prediction that a
+    token will be issued or what it would trade at. Farm plans are starting points, not financial advice.</p>
+  </footer>
+</main>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
