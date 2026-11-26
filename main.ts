@@ -23,6 +23,7 @@ import type { Snapshot } from './lib/model.ts';
 
 const root = dirname(fileURLToPath(import.meta.url));
 
+
 function inputPath(): string {
   const i = process.argv.indexOf('--input');
   if (i >= 0 && process.argv[i + 1]) return process.argv[i + 1]!;
@@ -42,7 +43,7 @@ function copyTree(from: string, to: string): void {
 function main(): void {
   const out = process.env.MAKEFUN_OUTPUT_DIR || '/output';
   const snapshot = JSON.parse(readFileSync(inputPath(), 'utf8')) as Snapshot;
-  const { rows, benchmarks, globalBenchmark } = buildBoard(snapshot);
+  const { rows, model } = buildBoard(snapshot);
   const watchCount = rows.filter((r) => r.watchlist).length;
 
   mkdirSync(out, { recursive: true });
@@ -54,10 +55,20 @@ function main(): void {
     source: snapshot.source,
     floor_usd: snapshot.floor_usd,
     model: {
-      implied_value: 'tvl_usd x peer_multiple x growth_factor x maturity_factor, rounded to whole dollars',
-      peer_multiple: 'median market-cap/TVL of the tokenised protocols in the same category in this snapshot (needs at least 3, else the global median)',
-      growth_factor: '1 + clamp(change_7d percent, -60, 150) / 250; unreported change is 1',
-      maturity_factor: '0.9 + 0.1 x min(years since listed_at, 4); unknown listing date is 1',
+      implied_value: 'exp(intercept + slope x log(tvl_usd) + category_offset), rounded to whole dollars — a power law FIT by least squares on the snapshot tokenised protocols, not a hand-set multiple',
+      fit: {
+        trained_on: model.nTrain,
+        intercept: model.intercept,
+        slope: model.slope,
+        category_offsets: 'per-category mean residual in log space, shrunk by n/(n+40); categories with fewer than 3 tokenised peers get no offset',
+      },
+      validation: {
+        method: 'deterministic 5-fold cross-validation over the tokenised protocols (fold = sha256(slug) mod 5), median absolute log error on held-out protocols',
+        fitted_model: model.cvFitted,
+        median_multiple_baseline: model.cvBaseline,
+        rejected_terms: '7-day growth and token-less maturity adjustments were fit and tested on the same folds; both raised held-out error and are not in the model',
+      },
+      band: 'value_low_usd..value_high_usd = the point value shifted by the 10th..90th percentiles of the out-of-fold log residuals',
       selection: 'protocols that record no token (mcap, gecko id and symbol all null), minus wrapped/staked/bridged products of tokenised protocols; the snapshot watchlist is included in full',
     },
     rows,
@@ -67,10 +78,10 @@ function main(): void {
   // The dashboard: static source from this repository, data generated here
   // so the page and the board can never drift apart. Rows are compact
   // arrays: [slug, name, category, chains, tvl, change_7d, listed_at,
-  // implied, rank, watchlist, multiple x1000, growth x100, maturity x100,
-  // farm family]. The farm-plan templates ship with the data and are
-  // expanded by the page, the same strings lib/model.ts expands into
-  // board.json.
+  // implied, rank, watchlist, effective multiple x1000, category
+  // adjustment x100, band low, band high, farm family]. The farm-plan
+  // templates ship with the data and are expanded by the page, the same
+  // strings lib/model.ts expands into board.json.
   copyTree(join(root, 'dashboard'), join(out, 'dashboard'));
   const data = {
     asOf: snapshot.as_of,
@@ -81,25 +92,35 @@ function main(): void {
       board: rows.length,
       watchlist: watchCount,
     },
-    benchmarks: [
-      ...benchmarks.map((b) => [b.category, b.peers, Math.round(b.multiple * 1000)] as const),
-      [null, globalBenchmark.peers, Math.round(globalBenchmark.multiple * 1000)] as const,
-    ],
+    model: {
+      intercept: Math.round(model.intercept * 10000) / 10000,
+      slope: Math.round(model.slope * 10000) / 10000,
+      nTrain: model.nTrain,
+      cvFitted: Math.round(model.cvFitted * 1000) / 1000,
+      cvBaseline: Math.round(model.cvBaseline * 1000) / 1000,
+      bandLo: Math.round(model.bandLo * 1000) / 1000,
+      bandHi: Math.round(model.bandHi * 1000) / 1000,
+      offsets: model.offsets.map((o) => [o.category, o.peers, Math.round(Math.exp(o.offset) * 1000)] as const),
+      // Peer coordinates are for the scatter only: log10 values x100 as
+      // integers — compact, and all the plot needs.
+      peers: model.peers.map((p) => [Math.round(Math.log10(p.tvl_usd) * 100), Math.round(Math.log10(p.mcap_usd) * 100)] as const),
+    },
     templates: FARM_TEMPLATES,
     rows: rows.map((r) => [
       r.slug,
       r.name,
       r.category,
-      r.chains,
+      r.chains.slice(0, 4),
       r.tvl_usd,
-      r.change_7d,
+      r.change_7d === null ? null : Math.round(r.change_7d * 100) / 100,
       r.listed_at,
       r.implied_value_usd,
       r.rank,
       r.watchlist ? 1 : 0,
-      Math.round(r.peer_multiple * 1000),
-      Math.round(r.growth_factor * 100),
-      Math.round(r.maturity_factor * 100),
+      Math.round(r.eff_multiple * 1000),
+      Math.round(r.category_adj * 100),
+      r.value_low_usd,
+      r.value_high_usd,
       r.farm_family,
     ]),
   };

@@ -3,15 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Token Launch Radar — pre-token protocols ranked by implied launch value</title>
+<title>Token Launch Radar — pre-token protocols ranked by a fitted launch-value model</title>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
 <header class="masthead">
-  <div class="masthead-in">
-    <div>
-      <h1>Token Launch Radar</h1>
-      <p class="tagline">Every protocol that still records no token, ranked by what its launch would be worth — with the steps to farm each one.</p>
+  <div class="mast-in">
+    <div class="mast-title">
+      <div class="radar-mark" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div>
+        <h1>Token Launch Radar</h1>
+        <p class="tagline">Every protocol that still records no token, ranked by what its launch would be worth under a value model <em>fitted</em> on the ones that already launched — with the steps to farm each one.</p>
+      </div>
     </div>
     <div class="mast-stats" id="mastStats"></div>
   </div>
@@ -19,21 +22,32 @@
 
 <main>
   <section class="model card">
-    <h2>How the implied value is computed</h2>
-    <p class="model-text">
-      Protocols that already launched reveal what the market pays per dollar of TVL. For each category this board takes the
-      <strong>median market-cap / TVL multiple of that category's tokenised protocols</strong> in the snapshot (the global median where a
-      category has fewer than three), then prices every still-tokenless protocol as
-      <strong>TVL &times; peer multiple &times; growth factor &times; maturity factor</strong>. The growth factor is
-      1 + clamp(7-day TVL change, &minus;60% to +150%) / 250; the maturity factor is 0.9 + 0.1 &times; years tracked with no token, capped at
-      four years. Tokenised protocols are the yardstick, never rows: the board is pre-token only, and a wrapped or staked product of a
-      token that already trades is excluded by the same rule the snapshot's watchlist follows.
-    </p>
-    <div class="bench-wrap">
-      <table class="bench" id="benchTable">
-        <thead><tr><th>Peer benchmark</th><th>Tokenised peers</th><th>Median mcap / TVL</th></tr></thead>
-        <tbody></tbody>
-      </table>
+    <div class="model-head">
+      <h2>A fitted model, not a hand-set multiple</h2>
+      <span class="model-badge" id="modelBadge"></span>
+    </div>
+    <div class="model-grid">
+      <div class="model-left">
+        <p class="model-text">
+          Launched protocols reveal what the market pays for TVL. This board fits a power law to all of them by least squares —
+          <strong>log(market cap) = <span id="eqIntercept"></span> + <span id="eqSlope"></span> &times; log(TVL)</strong> — plus one
+          category offset per category, shrunk hard toward zero so small categories barely move the price. Every candidate term
+          had to survive <strong>5-fold cross-validation</strong> on the launched protocols themselves: the fitted curve beat the
+          median-multiple model this board shipped first, while 7-day growth and token-less maturity adjustments
+          <em>raised</em> held-out error and were dropped.
+        </p>
+        <div class="cv" id="cvBox"></div>
+        <p class="model-note">Each row's band runs from the 10th to the 90th percentile of the model's out-of-fold residuals —
+          the honest spread of what launches actually priced at. A point value without its band would be false precision.</p>
+        <div class="off-wrap">
+          <h3>Category adjustments (multiplier on the curve)</h3>
+          <table class="off" id="offTable"><tbody></tbody></table>
+        </div>
+      </div>
+      <figure class="scatter-box">
+        <div id="scatter"></div>
+        <figcaption>Launched protocols (dots), the fitted curve (line), and this board's top pre-token candidates (diamonds). Log–log.</figcaption>
+      </figure>
     </div>
   </section>
 
@@ -54,7 +68,7 @@
           <option value="tvl">TVL</option>
           <option value="change">7d change</option>
           <option value="age">Longest tokenless</option>
-          <option value="name">Name A-Z</option>
+          <option value="name">Name A–Z</option>
         </select>
       </label>
       <label class="ctl check">
@@ -68,8 +82,8 @@
         <thead>
           <tr>
             <th class="num">#</th><th>Protocol</th><th>Category</th><th>Chains</th>
-            <th class="num">TVL</th><th class="num">7d</th><th class="num">Implied value</th>
-            <th class="num">Multiple</th><th class="num">Tokenless for</th>
+            <th class="num">TVL</th><th class="num">7d</th><th class="num">Implied value <span class="th-sub">+ 80% band</span></th>
+            <th class="num">Per $ TVL</th><th class="num">Tokenless for</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -80,7 +94,7 @@
   <section id="detailView" hidden></section>
 
   <footer>
-    <p>Built from a sealed snapshot of DefiLlama's protocol data (fetched 2026-11-14). "Records no token" is what the snapshot's record
+    <p>Built from a sealed snapshot of DefiLlama's protocol data (fetched 2026-11-14). “Records no token” is what the snapshot's record
     shows — a protocol may have a token its record does not carry. An implied value is this board's model output, not a prediction that a
     token will be issued or what it would trade at. Farm plans are starting points, not financial advice.</p>
   </footer>
